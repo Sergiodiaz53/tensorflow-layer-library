@@ -110,3 +110,22 @@ fabric.properties
 
 
 # End of https://www.gitignore.io/api/macos,pycharm
+.idea/tensorflow-layer-library.iml
+.idea/vcs.xml
+.idea/inspectionProfiles/profiles_settings.xml
+samples/__pycache__/sample_architectures.cpython-36.pyc
+TeLL/__pycache__/__init__.cpython-36.pyc
+TeLL/__pycache__/config.cpython-36.pyc
+TeLL/__pycache__/dataprocessing.cpython-36.pyc
+TeLL/__pycache__/datareaders.cpython-36.pyc
+TeLL/__pycache__/initializations.cpython-36.pyc
+TeLL/__pycache__/layers.cpython-36.pyc
+TeLL/__pycache__/regularization.cpython-36.pyc
+TeLL/__pycache__/session.cpython-36.pyc
+TeLL/utility/__pycache__/__init__.cpython-36.pyc
+TeLL/utility/__pycache__/misc.cpython-36.pyc
+TeLL/utility/__pycache__/timer.cpython-36.pyc
+TeLL/utility/__pycache__/workingdir.cpython-36.pyc
+working_dir/ArchitectureLSTM3/2018-10-05T14-54-30/00-script.zip
+working_dir/ArchitectureLSTM3/2018-10-05T14-54-30/PLOT_ON
+working_dir/ArchitectureLSTM3/2018-10-05T14-54-30/tensorboard/train/events.out.tfevents.1538744070.pc-sdiaz.ac.uma.es
