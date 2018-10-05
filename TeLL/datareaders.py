@@ -14,8 +14,10 @@ from os import path
 from typing import Union
 
 import numpy as np
+import pandas as pd
 from PIL import Image
 from multiprocess import Process, Queue
+from gensim.models import word2vec
 
 from TeLL.config import Config
 from TeLL.dataprocessing import DataProcessing
@@ -1492,3 +1494,80 @@ class ShortLongDataset(DataReader):
     
     def get_num_classes(self):
         return 1
+
+class CBCReader(DataReader):
+    def __init__(self, dset='train'):
+        """Wrapper class for tensorflow MNIST reader in TeLL DataReader format"""
+        super(CBCReader, self).__init__()
+
+        #
+        # Load Data
+        #
+        with Timer(name="Load data"):
+            # Test file
+            # CBC_file_dir = "./FilteredTEST.xlsx"
+
+            # Regular file
+            CBC_file_dir = "hemogramas_mergedReduced.xlsx"
+
+            CBC = pd.read_excel(CBC_file_dir, error_bad_lines=True)
+
+            # Drop rows with empty 'Observaciones' (just for clustering)
+            CBC = CBC.dropna(axis=0, how='any', subset=['Observaciones'])
+
+            # Get labels
+            # labels = CBC['Clase']
+
+            # Get only 'Observaciones'
+            CBC = CBC['Observaciones']
+
+            print((CBC[0]))
+
+            # Normalize text
+            auxCBC = []
+            for idx, sample in enumerate(CBC):
+                CBC[idx] = sample.split()
+                auxRow = []
+                for idx_2, token in enumerate(CBC[idx]):
+                    normalized_token = ''.join(e for e in token if e.isalpha()).upper()
+                    if (len(normalized_token) > 2):
+                        auxRow.append(normalized_token)
+                auxCBC.append(auxRow)
+
+            CBC = auxCBC
+            del auxCBC
+
+            # Create Word2Vec
+            model = word2vec.Word2Vec(CBC, size=200, window=5, min_count=250, workers=4)
+
+            # Get selected words
+            words = list(model.wv.vocab)
+
+            # Comments to wordembedding vector
+            embedding = []
+            for idx, sample in enumerate(CBC):
+                comment = []
+                for idx_2, token in enumerate(CBC[idx]):
+                    try:
+                        comment.append(model[token])
+                    except:
+                        CBC[idx].pop(idx_2)
+                embedding.append(comment)
+            embedding = np.asarray(embedding)
+
+        self.embedding = embedding
+        self.labels = embedding
+
+        print(embedding[0])
+
+    def read_sample(self, key):
+        """Read a single sample associated with 'key' from disk into dictionary;
+        Dictionary keys can be associated with a preprocessing pipeline (see example below);
+        For preprocessing, images or sequences of images should be numpy arrays of shape [frames, x, y, channels] or
+        [x, y, channels] and pixel values should be in range [0, 1];"""
+
+        key = np.random.choice(len(self.embedding), size=1, replace=False)
+        return dict(X=self.embedding[key][0], y=self.labels[key], ID=key)
+
+    def get_sample_keys(self):
+        return np.arange(len(self.embedding), dtype=np.int)

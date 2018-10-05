@@ -920,3 +920,115 @@ class ArchitectureConvLSTMMNIST(object):
     
     def get_layers(self):
         return self.__layers
+
+class Autoencoder(object):
+    def __init__(self, config: Config, dataset):
+
+        # We will use a list to store all layers for regularization etc. (this is optional)
+        layers = []
+
+        # Prepare xavier initialization for weights
+        w_init = tf.contrib.layers.xavier_initializer(uniform=False, seed=None, dtype=tf.float32)
+
+        #
+        # Create placeholders for input data (shape: [n_samples, n_sequence_positions, n_features])
+        #
+
+        input_shapes = dataset.get_input_shapes()
+        X = tf.placeholder(tf.float32, shape=input_shapes['X'].shape)
+
+        n_seq_pos = input_shapes['X'].shape[1] # dataset.X_shape is [sample, seq_pos, features]
+
+
+        # ----------------------------------------------------------------------------------------------------------
+        # Define network architecture
+        # ----------------------------------------------------------------------------------------------------------
+
+        #
+        # Input Layer
+
+        input_shape = input_shapes['X'].shape
+        rnn_input_layer = RNNInputLayer(tf.zeros(input_shape, dtype=tf.float32))
+        layers.append(rnn_input_layer)
+
+        #
+        # LSTM Layer
+        #
+        print("\tLSTM... Encoder")
+        # We want to modify the number of recurrent connections -> we have to specify the shape of the recurrent weights
+        rec_w_shape = (config.n_lstm, config.n_lstm)
+        # The forward weights can be initialized automatically, for the recurrent ones we will use our rec_w_shape
+        lstm_w_enc = [w_init, w_init(rec_w_shape)]
+        lstm_layer_enc = LSTMLayer(incoming=rnn_input_layer, n_units=config.n_lstm, name='LSTM',
+                               W_ci=lstm_w_enc, W_ig=lstm_w_enc, W_og=lstm_w_enc, W_fg=lstm_w_enc,
+                               b_ci=tf.zeros, b_ig=tf.zeros, b_og=tf.zeros, b_fg=tf.zeros,
+                               a_ci=tf.tanh, a_ig=tf.sigmoid, a_og=tf.sigmoid, a_fg=tf.sigmoid, a_out=tf.nn.elu,
+                               c_init=tf.zeros, h_init=tf.zeros, forgetgate=False, precomp_fwds=True, return_states=True)
+        layers.append(lstm_layer_enc)
+
+        print("\tLSTM... Decoder")
+        # We want to modify the number of recurrent connections -> we have to specify the shape of the recurrent weights
+        n_lstm_dec = input_shapes['X'].shape[0]
+        rec_w_shape = ( n_lstm_dec, n_lstm_dec)
+        # The forward weights can be initialized automatically, for the recurrent ones we will use our rec_w_shape
+        lstm_w_dec = [w_init, w_init(rec_w_shape)]
+        lstm_layer_dec = LSTMLayer(incoming=lstm_layer_enc, n_units=n_lstm_dec, name='LSTM',
+                               W_ci=lstm_w_dec, W_ig=lstm_w_dec, W_og=lstm_w_dec, W_fg=lstm_w_dec,
+                               b_ci=tf.zeros, b_ig=tf.zeros, b_og=tf.zeros, b_fg=tf.zeros,
+                               a_ci=tf.tanh, a_ig=tf.sigmoid, a_og=tf.sigmoid, a_fg=tf.sigmoid, a_out=tf.nn.elu,
+                               c_init=tf.zeros, h_init=tf.zeros, forgetgate=False, precomp_fwds=True, return_states=True)
+        layers.append(lstm_layer_dec)
+
+        # ----------------------------------------------------------------------------------------------------------
+        # Loop through sequence positions and create graph
+        # ----------------------------------------------------------------------------------------------------------
+
+        #
+        # Loop through sequence positions
+        #
+        print("\tRNN Loop...")
+        for seq_pos in range(n_seq_pos):
+            with tf.name_scope("Sequence_pos_{}".format(seq_pos)):
+                print("\t  seq. pos. {}...".format(seq_pos))
+                # Set rnn input layer to input at current sequence position
+                layers[0].update(X[:, seq_pos:seq_pos + 1])
+
+                # Calculate new lstm state (this automatically computes all dependencies, including rec. connections)
+                _ = lstm_layer_dec.get_output()
+
+        #
+        # Loop through tickersteps
+        #
+        # Use zeros as input during ticker steps
+        tickerstep_input = tf.zeros(input_shape, dtype=tf.string,
+                                    name="tickerstep_input")
+
+        for tickerstep in range(config.tickersteps):
+            with tf.name_scope("Tickerstep_{}".format(tickerstep)):
+                print("\t  tickerstep {}...".format(tickerstep))
+                # Set rnn input layer to input at current sequence position
+                layers[0].update(tickerstep_input)
+
+                # Calculate new lstm state (this automatically computes all dependencies, including rec. connections)
+                _ = lstm_layer_dec.get_output(tickerstep_nodes=True)
+
+        #
+        # Calculate output but consider that the lstm_layer is already computed
+        #
+        output = lstm_layer_dec.get_output(prev_layers=[lstm_layer_dec,lstm_layer_enc])
+
+        print("\tDone!")
+
+        #
+        # Publish
+        #
+        self.X = X
+        self.y_ = X
+        self.output = output
+        self.latent_space = lstm_layer_enc.get_output(prev_layers=[lstm_layer_enc])
+
+        # Store layers in list for regularization in main file
+        self.__layers = layers
+
+    def get_layers(self):
+        return self.__layers
