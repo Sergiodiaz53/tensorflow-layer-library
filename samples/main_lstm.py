@@ -190,6 +190,7 @@ def main(_):
             # Loop through minibatches
             #
 
+
             for mb_i, mb in enumerate(mb_training):
                 sys.stdout.flush()
                 #Print minibatch load time
