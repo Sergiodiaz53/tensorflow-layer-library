@@ -1,8 +1,10 @@
 {
   "specs": "ArchitectureLSTM3",
-  "cuda_gpu": "0",
-  "architecture": "sample_architectures.Autoencoder",
+  "cuda_gpu": "-1",
+  "architecture": "sample_architectures.AutoencoderDynamicLenght",
   "n_epochs": 100,
+  "n_dense": 50,
+  "Write_histograms": true,
   "dataset": {
     "reader": "TeLL.datareaders.CBCReader",
     "train": {
@@ -12,17 +14,50 @@
   },
   "score_at": 1000,
   "batchsize": 2,
-  "optimizer_params": {
-    "learning_rate": 1e-3
+
+
+  "working_dir": "working_dir",
+  "lstm_network_config":{
+    "n_latent_output_units":64,
+     "layers": [
+        {
+          "type": "LSTMLayer",
+          "a_out": "linear"
+        }
+      ],
+      "initializations_encoder": {
+        "og_bias": 1,
+        "ig_bias": -5,
+        "ci_bias": 0,
+        "fg_bias": 1,
+        "w_ig": [0.01, 0.1],
+        "w_og": [0.01, 0.1],
+        "w_ci": [0.01, 0.1],
+        "w_fg": [-1, -1]
+
+
+      },
+    "initializations_decoder": {
+        "og_bias": 1,
+        "ig_bias": -5,
+        "ci_bias": 0,
+        "fg_bias": 1,
+        "w_ig": [-1, 0.1],
+        "w_og": [-1, 0.1],
+        "w_ci": [-1, 0.1],
+        "w_fg": [-1, -1]
+
+
+      }
+
   },
-  "optimizer": "AdamOptimizer",
-  "l1": 1e-6,
-  "l2": 1e-5,
-  "n_lstm": 5,
-  "tickersteps": 0,
-  "n_dense_units": [
-    20,
-    20
-  ],
-  "working_dir": "working_dir"
+  "training_config":{
+    "optimizer": "AdamOptimizer",
+      "optimizer_params": {
+        "learning_rate": 1e-4
+      },
+      "l1": 1e-7,
+      "l2": 0,
+      "clip_gradients": 0.5
+  }
 }

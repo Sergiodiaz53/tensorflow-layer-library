@@ -17,7 +17,7 @@ the different examples and descriptions);
 # Imports before spawning workers (do NOT import tensorflow or matplotlib here)
 #
 import sys
-
+from collections import OrderedDict
 import numpy as np
 import progressbar
 
@@ -27,7 +27,6 @@ from TeLL.datareaders import initialize_datareaders, DataLoader
 from TeLL.utility.misc import AbortRun, check_kill_file
 from TeLL.utility.timer import Timer
 from TeLL.utility.workingdir import Workspace
-
 if __name__ == "__main__":
     from TeLL.session import TeLLSession
 
@@ -147,33 +146,18 @@ def main(_):
     with Timer(name="Loading Data"):
         readers = initialize_datareaders(config, required=("train", "val"))
         trainingset = DataLoader(readers["train"], batchsize=config.batchsize)
-        validationset = DataLoader(readers["val"], batchsize=config.batchsize)
+        #validationset = DataLoader(readers["val"], batchsize=config.batchsize)
 
         # Initialize TeLL session
-    tell = TeLLSession(config=config, summaries=["train"], model_params={"dataset": trainingset})
+    tell = TeLLSession(config=config, model_params={"input_shape": [300]})
 
     # Get some members from the session for easier usage
     session = tell.tf_session
-    summary_writer = tell.tf_summaries["train"]
+
     model = tell.model
     workspace, config = tell.workspace, tell.config
 
-    # Loss function for trainingset
-    print("Initializing loss calculation...")
-    loss = tf.reduce_mean(tf.square(model.y_ - model.output))
-    train_summary = tf.summary.scalar("Training Loss", loss)  # add loss to tensorboard
 
-    # Loss function for validationset
-    val_loss = tf.reduce_mean(tf.square(model.y_ - model.output))
-    val_loss_summary = tf.summary.scalar("Validation Loss", val_loss)  # add val_loss to tensorboard
-
-    # Regularization
-    reg_penalty = regularize(layers=model.get_layers(), l1=config.l1, l2=config.l2,
-                             regularize_weights=True, regularize_biases=True)
-    regpen_summary = tf.summary.scalar("Regularization Penalty", reg_penalty)  # add reg_penalty to tensorboard
-
-    # Update step for weights
-    update = update_step(loss + reg_penalty, config)
 
     # Initialize Tensorflow variables
     global_step = tell.initialize_tf_variables().global_step
@@ -205,9 +189,10 @@ def main(_):
             #
             # Loop through minibatches
             #
+
             for mb_i, mb in enumerate(mb_training):
                 sys.stdout.flush()
-                # Print minibatch load time
+                #Print minibatch load time
                 t_mb.print()
 
                 # Abort if indicated by file
@@ -218,33 +203,65 @@ def main(_):
                 #
                 if global_step % config.score_at == 0:
                     print("Starting scoring on validation set...")
-                    evaluate_on_validation_set(validationset, global_step, session, model, summary_writer,
-                                               val_loss_summary, val_loss, workspace)
 
+
+                # Get new sample
+                training_sample = np.ones(shape=(1,np.random.randint(low=20,high=100),300))
                 #
                 # Perform weight update
                 #
                 with Timer(name="Weight Update"):
-                    train_summ, regpen_summ, _, cur_loss = session.run(
-                        [train_summary, regpen_summary, update, loss],
-                        feed_dict={model.X: mb['X'], model.y_: mb['y']})
 
-                # Add current summary values to tensorboard
-                summary_writer.add_summary(train_summ, global_step=global_step)
-                summary_writer.add_summary(regpen_summ, global_step=global_step)
+                    #
+                    # Set placeholder values
+                    #
+                    placeholder_values = OrderedDict(
+                        input_placeholder=training_sample,
+                        sequence_length_placeholder = training_sample.shape[1]
+                    )
+                    feed_dict = dict(((model.placeholders[k], placeholder_values[k]) for k in placeholder_values.keys()))
 
-                # Add current loss to running average loss
-                train_loss += cur_loss
+                    #
+                    # Decide which tensors to compute
+                    #
+                    data_keys = ['lstm_internals_enc', 'lstm_internals_dec', 'lstm_h_enc',
+                                 'lstm_h_dec', 'loss' , 'loss_last_time_prediction','loss_last_time_prediction', 'reg_loss']
+                    data_tensors = [model.data_tensors[k] for k in data_keys]
+
+                    operation_keys = ['ae_update']
+                    operation_tensors = [model.operation_tensors[k] for k in operation_keys]
+
+                    summary_keys = ['all_summaries']
+                    summary_tensors = [model.summaries[k] for k in summary_keys]
+
+                    #
+                    # Run graph and re-associate return values with keys in dictionary
+                    #
+                    ret = session.run(data_tensors + summary_tensors + operation_tensors, feed_dict)
+
+                    data_keys = ['loss']
+                    data_tensors = [model.data_tensors[k] for k in data_keys]
+                    session.run(model.data_tensors['loss'] , feed_dict)
+                    session.run(model.data_tensors['latent_space'], feed_dict)
+
+                    ret_dict = OrderedDict(((k, ret[i]) for i, k in enumerate(data_keys)))
+                    del ret[:len(data_keys)]
+                    ret_dict.update(OrderedDict(((k, ret[i]) for i, k in enumerate(summary_keys))))
+
+
+
+
+
 
                 # Print some status info
-                print("ep {} mb {} loss {} (avg. loss {})".format(ep, mb_i, cur_loss, train_loss / (mb_i + 1)))
+                #print("ep {} mb {} loss {} (avg. loss {})".format(ep, mb_i, cur_loss, train_loss / (mb_i + 1)))
 
                 # Reset timer
-                t_mb = Timer(name="Load Minibatch")
+                #t_mb = Timer(name="Load Minibatch")
 
                 # Free the memory allocated for the minibatch data
-                mb.clear()
-                del mb
+                #mb.clear()
+                #del mb
 
                 global_step += 1
 
@@ -254,8 +271,7 @@ def main(_):
 
             # Perform scoring on validation set
             print("Starting scoring on validation set...")
-            evaluate_on_validation_set(validationset, global_step, session, model, summary_writer, val_loss_summary,
-                                       val_loss, workspace)
+
 
             tell.save_checkpoint(global_step=global_step)
 

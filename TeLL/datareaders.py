@@ -758,6 +758,8 @@ class DataLoader(object):
         minibatch = self.mb_info.copy()
         
         for key in minibatch.keys():
+            print("Cucu1:", minibatch[key][0])
+            print("Cucu2:", minibatch[key][1])
             minibatch[key] = np.empty(shape=minibatch[key][0], dtype=minibatch[key][1])
         
         for mb_ind, sample_ind in enumerate(mb_indices):
@@ -1504,6 +1506,8 @@ class CBCReader(DataReader):
         # Load Data
         #
         with Timer(name="Load data"):
+
+            print("Loading data...")
             # Test file
             # CBC_file_dir = "./FilteredTEST.xlsx"
 
@@ -1520,8 +1524,6 @@ class CBCReader(DataReader):
 
             # Get only 'Observaciones'
             CBC = CBC['Observaciones']
-
-            print((CBC[0]))
 
             # Normalize text
             auxCBC = []
@@ -1557,8 +1559,6 @@ class CBCReader(DataReader):
 
         self.embedding = embedding
         self.labels = embedding
-
-        print(embedding[0])
 
     def read_sample(self, key):
         """Read a single sample associated with 'key' from disk into dictionary;
